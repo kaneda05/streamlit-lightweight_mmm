@@ -1,7 +1,7 @@
 streamlit
 pandas
 numpy
-seaborn
+seaborn<0.13.0
 matplotlib
 japanize-matplotlib
 lightweight_mmm
