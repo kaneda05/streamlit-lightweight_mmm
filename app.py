@@ -1,25 +1,26 @@
 import os
-# NumbaのコンパイルエラーをOSレベルで完全に回避
+# 計算エンジンのコンパイルエラーをOSレベルで回避
 os.environ["NUMBA_DISABLE_JIT"] = "1"  
+os.environ["PYTENSOR_FLAGS"] = "cxx=" # PyTensorのC++コンパイルエラー回避
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+import japanize_matplotlib # グラフの日本語化
 import datetime
 import jax.numpy as jnp
 import io
 
-# LightweightMMM関連のインポート
+# --- LightweightMMM ---
 from lightweight_mmm import lightweight_mmm
 from lightweight_mmm import preprocessing
-from lightweight_mmm import plot
+from lightweight_mmm import plot as lmmm_plot
 from lightweight_mmm import optimize_media
 
 # --- ユーティリティ関数 ---
 def st_pyplot_with_download(fig, filename="chart.png", button_text="画像をダウンロード"):
-    """グラフを描画し、その下にダウンロードボタンを配置する"""
     st.pyplot(fig)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight", dpi=300, facecolor='white')
@@ -27,18 +28,16 @@ def st_pyplot_with_download(fig, filename="chart.png", button_text="画像をダ
     st.download_button(label=f"📥 {button_text}", data=buf, file_name=filename, mime="image/png")
 
 def display_manual_image(path, caption):
-    """マニュアル用の画像を小さく中央寄せで表示する"""
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        # widthを指定、またはuse_container_width=Falseでサイズを抑制
-        st.image(path, caption=f"【表示例】{caption}", use_container_width=True)
+        if os.path.exists(path):
+            st.image(path, caption=f"【表示例】{caption}", use_container_width=True)
+        else:
+            st.info(f"💡 **画像プレースホルダー: {caption}**\n\n分析後に画像を `{path}` に配置してください。")
 
 # --- ページ設定 ---
 st.set_page_config(page_title="MMM 分析プラットフォーム", layout="wide")
 
-# =====================================================================
-# サイドバー：ページ遷移ナビゲーション
-# =====================================================================
 st.sidebar.title("操作メニュー")
 page = st.sidebar.radio("移動先を選択してください", ["📊 分析ダッシュボード", "📘 操作マニュアル"])
 
@@ -47,43 +46,26 @@ page = st.sidebar.radio("移動先を選択してください", ["📊 分析ダ
 # =====================================================================
 if page == "📘 操作マニュアル":
     st.title("MMM 分析ダッシュボード 操作マニュアル")
-    st.info("本ページでは、各分析結果の解釈方法とビジネス上の活用ポイントを解説します。")
-    
+    st.info("本プラットフォームでは、Googleの「LightweightMMM」エンジンを用いて、マーケティング投資の最適化分析が可能です。")
+
     st.markdown("---")
     st.header("① Model Fit（予測精度の検証）")
-    st.markdown("""
-    構築されたAIモデルが、過去の実際の売上推移をどれだけ正確に再現できているかを確認します。
-    - **見方**: 黒線（実績値）に対し、青線（予測値）が連動しているかを確認してください。
-    - **ビジネス判断**: 乖離が激しい場合は、突発的なキャンペーンや競合の動きなど、データに含まれていない要因が影響している可能性があります。
-    """)
+    st.write("過去の実績（黒線）を、AIの予測モデル（色線）がどれだけトレースできているかを確認します。")
     display_manual_image("images/model_fit.png", "Model Fit")
 
     st.markdown("---")
     st.header("② Contribution & ROI（貢献度と投資対効果）")
-    st.markdown("""
-    どの施策が売上に寄与したか（貢献度）と、投下予算に対していくらのリターンがあったか（ROI）を分析します。
-    - **Contribution**: 全売上における各メディアの寄与割合。baselineは広告なしでも発生する基礎売上を指します。
-    - **ROI**: 1円あたりのリターン。効率の良い媒体の特定に活用します。
-    """)
+    st.write("各プロモーションが全体の売上に何割寄与したか（貢献度）と、費用対効果（ROI）を分析します。")
     display_manual_image("images/contribution_roi.png", "Contribution & ROI")
 
     st.markdown("---")
-    st.header("③ Adstock（残存効果の特性）")
-    st.markdown("""
-    広告の「持続性」を可視化します。
-    - **見方**: 分布が右側に寄っているメディアほど、一度の投下で効果が数週間にわたって持続する傾向があります。
-    - **ビジネス判断**: 残存効果の高いメディアは、間隔を空けた投下でも効果を維持しやすい特性があります。
-    """)
-    display_manual_image("images/adstock.png", "Adstock Posteriors")
+    st.header("③ Adstock & Saturation（残存効果と収穫逓減）")
+    st.write("広告効果の「長持ち度（Adstock）」を確認します。分布が右に寄っているメディアほど効果が長続きします。")
+    display_manual_image("images/adstock.png", "Adstock Parameters")
 
     st.markdown("---")
     st.header("④ Budget Optimization（予算配分の最適化）")
-    st.markdown("""
-    現在の総予算を維持したまま、売上を最大化するための理想的な配分をシミュレーションします。
-    - **Previous**: 現状の配分比率。
-    - **Optimal**: 統計的に導き出された最も効率的な配分案。
-    - **ビジネス判断**: 次期の予算策定におけるエビデンス（論拠）として利用します。
-    """)
+    st.write("過去と同じ総予算を使って、売上を最大化するための理想の配分をシミュレーションします。")
     display_manual_image("images/budget_optimization.png", "Budget Optimization")
 
 # =====================================================================
@@ -92,8 +74,8 @@ if page == "📘 操作マニュアル":
 elif page == "📊 分析ダッシュボード":
     st.title("MMM 分析ダッシュボード")
 
-    # --- 1. データ設定 ---
     st.header("1. データ設定")
+
     uploaded_file = st.file_uploader("分析用CSVデータをアップロードしてください", type="csv")
 
     if uploaded_file is not None:
@@ -113,8 +95,41 @@ elif page == "📊 分析ダッシュボード":
             media_cols = st.multiselect("説明変数（メディア支出）", [col for col in df.columns if col != target_col])
 
         if target_col and media_cols:
+            # =========================================================
+            # 追加実装部分：EDA（探索的データ分析）
+            # =========================================================
             st.markdown("---")
-            st.header("2. モデル構築の設定")
+            st.header("2. データの基礎分析 (EDA)")
+            
+            with st.expander("🔍 欠損値と相関関係を確認する（クリックで開閉）", expanded=False):
+                col_eda1, col_eda2 = st.columns(2)
+                
+                # 左側：欠損値の確認テーブル
+                with col_eda1:
+                    st.subheader("欠損値の確認")
+                    check_cols = [target_col] + media_cols
+                    missing_data = df[check_cols].isnull().sum().reset_index()
+                    missing_data.columns = ['変数名', '欠損値の数']
+                    st.dataframe(missing_data, use_container_width=True)
+                    if missing_data['欠損値の数'].sum() > 0:
+                        st.warning("⚠️ 欠損値が含まれています。MMMを実行する前に前処理（0埋めや補間など）を行うことを推奨します。")
+                    else:
+                        st.success("✅ 欠損値はありません。")
+                
+                # 右側：相関関係のヒートマップ
+                with col_eda2:
+                    st.subheader("変数間の相関関係 (Heatmap)")
+                    fig_corr, ax_corr = plt.subplots(figsize=(6, 5))
+                    corr_matrix = df[check_cols].corr()
+                    sns.heatmap(corr_matrix, annot=True, cmap='Blues', fmt=".2f", ax=ax_corr, 
+                                vmin=-1, vmax=1, center=0, square=True)
+                    st.pyplot(fig_corr)
+
+            # =========================================================
+            # モデル構築
+            # =========================================================
+            st.markdown("---")
+            st.header("3. モデル構築の実行")
             
             min_date, max_date = df.index.min().date(), df.index.max().date()
             col_train, col_test = st.columns(2)
@@ -125,9 +140,14 @@ elif page == "📊 分析ダッシュボード":
                 test_start = st.date_input("検証期間開始日", train_end + datetime.timedelta(days=1))
                 test_end = st.date_input("検証期間終了日", max_date)
 
-            if st.button("モデル構築を実行する", type="primary"):
-                with st.spinner('ベイズ推定による計算を実行中です...'):
+            if st.button("LightweightMMM で分析を開始する", type="primary"):
+                with st.spinner("ベイズ最適化を実行中です...（数分かかります）"):
+                    for key in ['mmm_model', 'optim_result']:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                            
                     df_train = df.loc[train_start:train_end]
+                    
                     media_data_train = df_train[media_cols].values
                     target_train = df_train[target_col].values
                     costs_train = df_train[media_cols].sum().values
@@ -140,8 +160,8 @@ elif page == "📊 分析ダッシュボード":
                     target_scaled = target_scaler.fit_transform(target_train)
                     costs_scaled = cost_scaler.fit_transform(costs_train)
 
-                    mmm = lightweight_mmm.LightweightMMM(model_name="adstock")
-                    mmm.fit(
+                    model = lightweight_mmm.LightweightMMM(model_name="adstock")
+                    model.fit(
                         media=media_data_scaled,
                         media_prior=costs_scaled,
                         target=target_scaled,
@@ -150,125 +170,105 @@ elif page == "📊 分析ダッシュボード":
                         seed=42
                     )
                     
-                    st.session_state['mmm'] = mmm
+                    st.session_state['mmm_model'] = model
                     st.session_state['target_scaler'] = target_scaler
                     st.session_state['cost_scaler'] = cost_scaler
                     st.session_state['media_scaler'] = media_scaler
-                    st.session_state['media_cols'] = media_cols
                     st.session_state['costs_train'] = costs_train
+                    st.session_state['media_cols'] = media_cols
                     st.session_state['df_train'] = df_train
-                    if 'optim_result' in st.session_state:
-                        del st.session_state['optim_result']
                     
                     st.success("計算が完了しました。")
 
-            # --- 3. 分析結果表示 ---
-            if 'mmm' in st.session_state:
-                mmm = st.session_state['mmm']
-                target_scaler = st.session_state['target_scaler']
-                cost_scaler = st.session_state['cost_scaler']
-                media_scaler = st.session_state['media_scaler']
-                costs_train = st.session_state['costs_train']
+            # --- 4. 分析結果表示 ---
+            if 'mmm_model' in st.session_state:
+                model = st.session_state['mmm_model']
                 media_cols = st.session_state['media_cols']
                 df_train = st.session_state['df_train']
                 
                 st.markdown("---")
-                st.header("3. 分析結果レポート")
-                
-                media_effect_hat, roi_hat = mmm.get_posterior_metrics(target_scaler=target_scaler, cost_scaler=cost_scaler)
+                st.header("4. 分析結果レポート")
                 
                 tab1, tab2, tab3, tab4 = st.tabs([
-                    "① Model Fit（精度）", 
-                    "② Contribution & ROI", 
-                    "③ Adstock（残存効果）", 
-                    "④ Budget Optimization（最適配分）"
+                    "① Model Fit (精度)", 
+                    "② Contribution (貢献度)", 
+                    "③ Adstock (残存効果)", 
+                    "④ Optimization (最適配分)"
                 ])
+                
+                target_scaler = st.session_state['target_scaler']
+                cost_scaler = st.session_state['cost_scaler']
+                media_scaler = st.session_state['media_scaler']
+                costs_train = st.session_state['costs_train']
+                media_effect_hat, roi_hat = model.get_posterior_metrics(target_scaler=target_scaler, cost_scaler=cost_scaler)
                 
                 with tab1:
                     c1, c2, c3 = st.columns([1, 4, 1])
                     with c2:
-                        fig1 = plot.plot_model_fit(mmm, target_scaler=target_scaler)
-                        st_pyplot_with_download(fig1, "model_fit.png", "グラフを保存")
+                        fig1 = lmmm_plot.plot_model_fit(model, target_scaler=target_scaler)
+                        st_pyplot_with_download(fig1, "lmmm_fit.png", "グラフを保存")
                 
                 with tab2:
                     c1, c2, c3 = st.columns([1, 6, 1])
                     with c2:
-                        fig2_area = plot.plot_media_baseline_contribution_area_plot(
-                            media_mix_model=mmm, target_scaler=target_scaler, channel_names=media_cols
+                        fig2_area = lmmm_plot.plot_media_baseline_contribution_area_plot(
+                            media_mix_model=model, target_scaler=target_scaler, channel_names=media_cols
                         )
-                        st_pyplot_with_download(fig2_area, "contribution_area.png", "時系列推移を保存")
+                        st_pyplot_with_download(fig2_area, "lmmm_area.png", "時系列推移を保存")
 
                     col_bar1, col_bar2 = st.columns(2)
                     with col_bar1:
-                        fig2_bar = plot.plot_bars_media_metrics(metric=media_effect_hat, metric_name="Contribution", channel_names=media_cols)
-                        st_pyplot_with_download(fig2_bar, "contribution_bar.png", "貢献度を保存")
+                        fig2_bar = lmmm_plot.plot_bars_media_metrics(metric=media_effect_hat, metric_name="Contribution", channel_names=media_cols)
+                        st_pyplot_with_download(fig2_bar, "lmmm_contribution.png", "貢献度を保存")
                     with col_bar2:
-                        fig3 = plot.plot_bars_media_metrics(metric=roi_hat, metric_name="ROI", channel_names=media_cols)
-                        st_pyplot_with_download(fig3, "roi_bar.png", "ROIを保存")
+                        fig3 = lmmm_plot.plot_bars_media_metrics(metric=roi_hat, metric_name="ROI", channel_names=media_cols)
+                        st_pyplot_with_download(fig3, "lmmm_roi.png", "ROIを保存")
                         
                 with tab3:
                     c1, c2, c3 = st.columns([1, 4, 1])
                     with c2:
-                        fig_posteriors = plot.plot_media_channel_posteriors(media_mix_model=mmm, channel_names=media_cols)
-                        st_pyplot_with_download(fig_posteriors, "adstock_posteriors.png", "残存パラメータを保存")
+                        fig_posteriors = lmmm_plot.plot_media_channel_posteriors(media_mix_model=model, channel_names=media_cols)
+                        st_pyplot_with_download(fig_posteriors, "lmmm_adstock.png", "残存パラメータを保存")
 
                 with tab4:
-                    # タブを開いた際に自動実行
                     if 'optim_result' not in st.session_state:
-                        with st.spinner("予算配分の最適化を計算中..."):
+                        with st.spinner("予算最適化シミュレーションを実行中..."):
                             opt_periods = len(df_train)
                             opt_budget = float(costs_train.sum())
-                            current_allocation_ratio = costs_train / costs_train.sum()
-                            # 配分計算を安定させるためのNumPyキャスト
-                            previous_budget_allocation = np.array(opt_budget * current_allocation_ratio)
+                            current_allocation = costs_train / costs_train.sum()
+                            prev_budget = np.array(opt_budget * current_allocation)
 
-                            trace_backup = mmm.trace.copy()
+                            trace_backup = model.trace.copy()
                             for site in ["mu", "media_transformed", "prediction"]:
-                                mmm.trace.pop(site, None)
+                                model.trace.pop(site, None)
                             
                             try:
-                                # 探索範囲を適正化し、異常値（マイナス等）を抑制
                                 solution, kpi_without_optim, kpi_with_optim = optimize_media.find_optimal_budgets(
-                                    n_time_periods=opt_periods,
-                                    media_mix_model=mmm,
-                                    extra_features=None,
-                                    budget=opt_budget,
-                                    prices=jnp.ones(mmm.n_media_channels),
-                                    media_scaler=media_scaler,
-                                    target_scaler=target_scaler,
-                                    bounds_lower_pct=0.2, # 過度な削減を抑える
-                                    bounds_upper_pct=2.0, # 過度な増加を抑える
-                                    seed=42,
+                                    n_time_periods=opt_periods, media_mix_model=model, extra_features=None,
+                                    budget=opt_budget, prices=jnp.ones(model.n_media_channels),
+                                    media_scaler=media_scaler, target_scaler=target_scaler,
+                                    bounds_lower_pct=0.2, bounds_upper_pct=2.0, seed=42,
                                 )
                             finally:
-                                mmm.trace = trace_backup
+                                model.trace = trace_backup
                             
                             st.session_state['optim_result'] = {
                                 'solution': np.array(solution.x),
                                 'kpi_before': float(jnp.mean(kpi_without_optim)),
                                 'kpi_after': float(jnp.mean(kpi_with_optim)),
-                                'prev_budget': previous_budget_allocation
+                                'prev_budget': prev_budget
                             }
 
                     res = st.session_state['optim_result']
                     c1, c2, c3 = st.columns([1, 6, 1])
                     with c2:
                         plot_kwargs = {
-                            "media_mix_model": mmm,
-                            "kpi_with_optim": res['kpi_after'],
-                            "kpi_without_optim": res['kpi_before'],
-                            "previous_budget_allocation": res['prev_budget'],
-                            "figure_size": (10, 10),
-                            "channel_names": media_cols
+                            "media_mix_model": model, "kpi_with_optim": res['kpi_after'],
+                            "kpi_without_optim": res['kpi_before'], "previous_budget_allocation": res['prev_budget'],
+                            "figure_size": (10, 10), "channel_names": media_cols
                         }
                         try:
-                            # ライブラリのバージョン差異を吸収
-                            fig_opt = plot.plot_pre_post_budget_allocation_comparison(
-                                **plot_kwargs, optimal_buget_allocation=res['solution']
-                            )
+                            fig_opt = lmmm_plot.plot_pre_post_budget_allocation_comparison(**plot_kwargs, optimal_buget_allocation=res['solution'])
                         except TypeError:
-                            fig_opt = plot.plot_pre_post_budget_allocation_comparison(
-                                **plot_kwargs, optimal_budget_allocation=res['solution']
-                            )
-
-                        st_pyplot_with_download(fig_opt, "budget_optimization.png", "アロケーション案を保存")
+                            fig_opt = lmmm_plot.plot_pre_post_budget_allocation_comparison(**plot_kwargs, optimal_budget_allocation=res['solution'])
+                        st_pyplot_with_download(fig_opt, "lmmm_budget_opt.png", "アロケーション案を保存")
