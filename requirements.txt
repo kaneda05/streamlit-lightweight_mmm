@@ -3,5 +3,5 @@ pandas
 numpy<2.0.0
 japanize-matplotlib
 lightweight_mmm==0.1.9
-jax
-jaxlib
+jax==0.4.13
+jaxlib==0.4.13
